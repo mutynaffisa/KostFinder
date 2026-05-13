@@ -1,2 +1,5 @@
+[phases.setup]
+    nixPkgs = ["...", "php82Packages.mysqli"]
+
 [variables]
-    PHP_EXTENSIONS = "mysqli, pdo_mysql"
+    PHP_EXTENSIONS = "mysqli, pdo_mysql, gettext"
