@@ -10,10 +10,10 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'owner') {
 $owner_id = $_SESSION['user_id'];
 $owner_name = $_SESSION['username'] ?? 'Owner';
 
-// --- 🔥 QUICK SWITCH ACCOUNT LOGIC 🔥 ---
-if (isset($_GET['quick_switch'])) {
-    $target_role = mysqli_real_escape_string($conn, $_GET['quick_switch']);
-    $q_switch = mysqli_query($conn, "SELECT * FROM users WHERE role = '$target_role' LIMIT 1");
+// --- 🔥 UPGRADED QUICK SWITCH ACCOUNT LOGIC 🔥 ---
+if (isset($_GET['switch_to_id'])) {
+    $target_id = (int)$_GET['switch_to_id'];
+    $q_switch = mysqli_query($conn, "SELECT * FROM users WHERE id = $target_id LIMIT 1");
     
     if($q_switch && mysqli_num_rows($q_switch) > 0) {
         $sw = mysqli_fetch_assoc($q_switch);
@@ -21,7 +21,9 @@ if (isset($_GET['quick_switch'])) {
         $_SESSION['username'] = $sw['username'];
         $_SESSION['role'] = $sw['role'];
         
-        header("Location: ../" . $target_role . "/" . $target_role . "_dashboard.php");
+        if ($sw['role'] === 'admin') { header("Location: ../admin/admin_dashboard.php"); }
+        elseif ($sw['role'] === 'user') { header("Location: ../user/user_dashboard.php"); }
+        else { header("Location: owner_dashboard.php"); }
         exit;
     }
 }
@@ -43,7 +45,6 @@ if (isset($_GET['action']) && isset($_GET['booking_id'])) {
     if ($b_data) {
         $target_user = $b_data['user_id'];
         $msg_notif = "Booking kamu telah di-$status oleh Owner!";
-        // FIX ERROR TITLE DISINI:
         mysqli_query($conn, "INSERT INTO notifications (user_id, title, message) VALUES ($target_user, 'Status Booking', '$msg_notif')");
     }
     
@@ -52,14 +53,13 @@ if (isset($_GET['action']) && isset($_GET['booking_id'])) {
     exit;
 }
 
-// --- AMBIL DATA USER LAIN BUAT SWITCH ACCOUNT ---
-$demo_user = mysqli_fetch_assoc(mysqli_query($conn, "SELECT username FROM users WHERE role = 'user' LIMIT 1"));
-$demo_admin = mysqli_fetch_assoc(mysqli_query($conn, "SELECT username FROM users WHERE role = 'admin' LIMIT 1"));
+// --- AMBIL SEMUA DATA USER BUAT SWITCH ACCOUNT (Kecuali user yg lagi login) ---
+$all_users_query = mysqli_query($conn, "SELECT id, username, role FROM users WHERE id != $owner_id ORDER BY role ASC, id DESC");
 
 // --- AMBIL DATA STATISTIK & NOTIF ---
 $total_listing = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM kosts WHERE owner_id = $owner_id"))['c'];
 $new_bookings = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM bookings WHERE owner_id = $owner_id AND status = 'pending'"))['c'];
-$unread_chats = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM messages WHERE receiver_id = $owner_id"))['c'];
+$unread_chats = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM messages WHERE receiver_id = $owner_id AND is_read = 0"))['c'];
 $notif_query = mysqli_query($conn, "SELECT * FROM notifications WHERE user_id = $owner_id ORDER BY created_at DESC LIMIT 5");
 
 // --- AMBIL DATA BOOKING MASUK ---
@@ -100,22 +100,18 @@ $my_kosts_query = mysqli_query($conn, "SELECT * FROM kosts WHERE owner_id = $own
             </div>
             <nav class="space-y-2 flex-1">
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-4">Management</p>
-                
                 <a href="#" class="bg-[#FF6B6B] text-white flex items-center gap-4 p-4 rounded-2xl font-bold shadow-lg shadow-red-100">
                     <span class="material-symbols-rounded">dashboard</span> Dashboard
                 </a>
-                
                 <a href="owner_add_kost.php" class="flex items-center gap-4 p-4 text-slate-500 hover:bg-red-50 hover:text-[#FF6B6B] rounded-2xl font-bold transition-all">
                     <span class="material-symbols-rounded">add_business</span> Add New Kost
                 </a>
-                
                 <a href="owner_inbox.php" class="flex items-center justify-between p-4 text-slate-500 hover:bg-red-50 hover:text-[#FF6B6B] rounded-2xl font-bold transition-all">
                     <div class="flex items-center gap-4"><span class="material-symbols-rounded">forum</span> Messages</div>
                     <?php if($unread_chats > 0): ?>
                         <span class="bg-[#FF6B6B] text-white text-[10px] px-2 py-1 rounded-lg"><?= $unread_chats ?></span>
                     <?php endif; ?>
                 </a>
-
                 <a href="../user/user_dashboard.php" class="flex items-center gap-4 p-4 text-slate-500 hover:bg-red-50 hover:text-[#FF6B6B] rounded-2xl font-bold transition-all">
                     <span class="material-symbols-rounded">travel_explore</span> Explore & Reviews
                 </a>
@@ -140,7 +136,9 @@ $my_kosts_query = mysqli_query($conn, "SELECT * FROM kosts WHERE owner_id = $own
                 <div class="relative group cursor-pointer">
                     <button class="p-2.5 hover:bg-slate-50 rounded-full transition-colors text-slate-400 relative">
                         <span class="material-symbols-rounded">notifications</span>
-                        <span class="absolute top-2.5 right-2.5 w-2 h-2 bg-[#FF6B6B] rounded-full border-2 border-white"></span>
+                        <?php if(mysqli_num_rows($notif_query) > 0): ?>
+                            <span class="absolute top-2.5 right-2.5 w-2 h-2 bg-[#FF6B6B] rounded-full border-2 border-white"></span>
+                        <?php endif; ?>
                     </button>
                     <div class="absolute right-0 mt-3 w-80 bg-white rounded-[2rem] shadow-2xl border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-6">
                         <h4 class="text-sm font-black text-slate-800 mb-4 flex justify-between">Notifications</h4>
@@ -177,25 +175,21 @@ $my_kosts_query = mysqli_query($conn, "SELECT * FROM kosts WHERE owner_id = $own
                         <div class="p-3">
                             <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2 mt-2">Switch Account To:</p>
                             
-                            <?php if($demo_user): ?>
-                            <a href="?quick_switch=user" class="flex items-center gap-4 px-4 py-3 hover:bg-blue-50 rounded-2xl transition-all group/item">
-                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=<?= urlencode($demo_user['username']) ?>" class="w-10 h-10 rounded-xl bg-blue-100">
-                                <div class="text-left">
-                                    <p class="text-sm font-bold text-slate-700 group-hover/item:text-blue-600"><?= htmlspecialchars($demo_user['username']) ?></p>
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase">Renter Account</p>
-                                </div>
-                            </a>
-                            <?php endif; ?>
-
-                            <?php if($demo_admin): ?>
-                            <a href="?quick_switch=admin" class="flex items-center gap-4 px-4 py-3 mt-1 hover:bg-indigo-50 rounded-2xl transition-all group/item">
-                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=<?= urlencode($demo_admin['username']) ?>" class="w-10 h-10 rounded-xl bg-indigo-100">
-                                <div class="text-left">
-                                    <p class="text-sm font-bold text-slate-700 group-hover/item:text-indigo-600"><?= htmlspecialchars($demo_admin['username']) ?></p>
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase">Admin Account</p>
-                                </div>
-                            </a>
-                            <?php endif; ?>
+                            <div class="max-h-48 overflow-y-auto no-scrollbar">
+                                <?php if(mysqli_num_rows($all_users_query) > 0): ?>
+                                    <?php while($su = mysqli_fetch_assoc($all_users_query)): ?>
+                                    <a href="?switch_to_id=<?= $su['id'] ?>" class="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 rounded-2xl transition-all group/item mt-1">
+                                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=<?= urlencode($su['username']) ?>" class="w-10 h-10 rounded-xl bg-slate-100 flex-shrink-0">
+                                        <div class="text-left overflow-hidden">
+                                            <p class="text-sm font-bold text-slate-700 group-hover/item:text-[#FF6B6B] truncate"><?= htmlspecialchars($su['username']) ?></p>
+                                            <p class="text-[10px] text-slate-400 font-bold uppercase"><?= htmlspecialchars($su['role']) ?> ACCOUNT</p>
+                                        </div>
+                                    </a>
+                                    <?php endwhile; ?>
+                                <?php else: ?>
+                                    <p class="text-xs text-slate-400 italic text-center py-2">Belum ada akun lain.</p>
+                                <?php endif; ?>
+                            </div>
                             
                             <div class="h-[1px] bg-slate-100 my-3"></div>
                             <a href="../auth/logout.php" class="flex items-center gap-4 px-4 py-3 text-red-500 font-black text-sm hover:bg-red-50 rounded-2xl transition-all">

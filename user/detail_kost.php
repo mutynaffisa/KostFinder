@@ -31,14 +31,34 @@ if (isset($_POST['book_now'])) {
     } else {
         $insert_booking = "INSERT INTO bookings (user_id, kost_id, owner_id, status) VALUES ($user_id, $kost_id, $owner_id, 'pending')";
         if(mysqli_query($conn, $insert_booking)) {
-            $msg = "booking_success";
-        }
-
-        $insert_booking = "INSERT INTO bookings (user_id, kost_id, owner_id, status) VALUES ($user_id, $kost_id, $owner_id, 'pending')";
-        if(mysqli_query($conn, $insert_booking)) {
             // SUNTIK NOTIF KE OWNER
             mysqli_query($conn, "INSERT INTO notifications (user_id, title, message) VALUES ($owner_id, 'Booking Request Baru', 'Seseorang telah mengajukan sewa untuk kost kamu!')");
-            $msg = "booking_success";
+            
+            // REDIRECT OTOMATIS KE HALAMAN MY BOOKINGS
+            echo "<script>
+                    alert('Booking request sent! Menunggu persetujuan Owner.');
+                    window.location.href = 'my_bookings.php';
+                  </script>";
+            exit;
+        }
+    }
+}
+
+// --- LOGIKA TAMBAH REVIEW ---
+if (isset($_POST['submit_review'])) {
+    $rating = (int)$_POST['rating'];
+    $comment = mysqli_real_escape_string($conn, $_POST['comment']);
+    
+    // Cek apakah user ini sudah pernah kasih review di kost ini
+    $check_review = mysqli_query($conn, "SELECT id FROM reviews WHERE user_id = $user_id AND kost_id = $kost_id");
+    if(mysqli_num_rows($check_review) > 0) {
+        $msg = "already_reviewed";
+    } else {
+        $insert_review = "INSERT INTO reviews (user_id, kost_id, rating, comment) VALUES ($user_id, $kost_id, $rating, '$comment')";
+        if(mysqli_query($conn, $insert_review)) {
+            // Refresh halaman biar review langsung muncul
+            header("Location: detail_kost.php?id=$kost_id");
+            exit;
         }
     }
 }
@@ -46,6 +66,7 @@ if (isset($_POST['book_now'])) {
 // Cek Wishlist
 $wishlist_query = mysqli_query($conn, "SELECT id FROM wishlist WHERE user_id = $user_id AND kost_id = $kost_id");
 $is_wish = ($wishlist_query && mysqli_num_rows($wishlist_query) > 0);
+
 $reviews_query = mysqli_query($conn, "SELECT r.*, u.username FROM reviews r JOIN users u ON r.user_id = u.id WHERE r.kost_id = $kost_id ORDER BY r.created_at DESC");
 $avg_rating_q = mysqli_fetch_assoc(mysqli_query($conn, "SELECT AVG(rating) as avg FROM reviews WHERE kost_id = $kost_id"));
 $avg_rating = round($avg_rating_q['avg'], 1) ?: "0";
@@ -70,18 +91,22 @@ $facilities_array = !empty($kost['facilities']) ? explode(', ', $kost['facilitie
             <span class="material-symbols-rounded">arrow_back</span> Back to Explore
         </a>
 
-        <?php if($msg === 'booking_success'): ?>
-            <div class="bg-green-50 text-green-600 p-4 rounded-2xl mb-8 font-bold border border-green-100 flex items-center gap-2">
-                <span class="material-symbols-rounded">check_circle</span> Booking request sent! Menunggu persetujuan Owner.
-            </div>
-        <?php elseif($msg === 'already_booked'): ?>
+        <?php if($msg === 'already_booked'): ?>
             <div class="bg-orange-50 text-orange-600 p-4 rounded-2xl mb-8 font-bold border border-orange-100 flex items-center gap-2">
                 <span class="material-symbols-rounded">info</span> Kamu sudah mengajukan booking untuk kost ini dan sedang diproses.
+            </div>
+        <?php elseif($msg === 'already_reviewed'): ?>
+            <div class="bg-blue-50 text-blue-600 p-4 rounded-2xl mb-8 font-bold border border-blue-100 flex items-center gap-2">
+                <span class="material-symbols-rounded">info</span> Kamu sudah memberikan ulasan untuk kost ini sebelumnya.
             </div>
         <?php endif; ?>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            
+            <!-- KOLOM KIRI (KONTEN UTAMA) -->
             <div class="lg:col-span-2 space-y-8">
+                
+                <!-- Gambar Kost -->
                 <div class="relative h-[450px] rounded-[3rem] overflow-hidden coral-shadow border border-slate-100 bg-slate-100">
                     <img src="../<?= htmlspecialchars($kost['thumbnail']) ?>" class="w-full h-full object-cover">
                     <a href="add_wishlist.php?id=<?= $kost['id'] ?>" class="absolute top-6 right-6 p-4 glass rounded-2xl <?= $is_wish ? 'text-red-500' : 'text-slate-400' ?> hover:text-red-500 hover:scale-110 transition-all shadow-sm">
@@ -89,6 +114,7 @@ $facilities_array = !empty($kost['facilities']) ? explode(', ', $kost['facilitie
                     </a>
                 </div>
 
+                <!-- Deskripsi & Fasilitas -->
                 <div class="glass p-8 lg:p-10 rounded-[3rem] coral-shadow">
                     <h2 class="text-2xl font-black mb-6 flex items-center gap-2 text-slate-800">
                         <span class="material-symbols-rounded text-[#FF6B6B]">description</span> Property Description
@@ -110,8 +136,72 @@ $facilities_array = !empty($kost['facilities']) ? explode(', ', $kost['facilitie
                         <?php endif; ?>
                     </div>
                 </div>
+
+                <!-- REVIEWS (Dipindah ke sini agar lebih lebar dan simetris) -->
+                <div class="glass p-8 lg:p-10 rounded-[3rem] coral-shadow">
+                    <h2 class="text-2xl font-black mb-8 flex items-center gap-2 text-slate-800">
+                        <span class="material-symbols-rounded text-[#FF6B6B]">reviews</span> Reviews & Ratings (★ <?= $avg_rating ?>)
+                    </h2>
+                    
+                    <!-- List Ulasan (Berbentuk Grid) -->
+                    <div class="mb-10">
+                        <?php if(mysqli_num_rows($reviews_query) > 0): ?>
+                            <?php mysqli_data_seek($reviews_query, 0); ?>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <?php while($rev = mysqli_fetch_assoc($reviews_query)): ?>
+                                    <div class="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                                        <div class="flex justify-between items-center mb-2">
+                                            <p class="font-bold text-slate-800"><?= htmlspecialchars($rev['username']) ?></p>
+                                            <div class="flex text-[#FF6B6B] text-sm">
+                                                <?php for($i=0; $i<$rev['rating']; $i++) echo "★"; ?>
+                                            </div>
+                                        </div>
+                                        <p class="text-sm text-slate-500 leading-relaxed"><?= htmlspecialchars($rev['comment']) ?></p>
+                                    </div>
+                                <?php endwhile; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="p-10 bg-slate-50 rounded-[2rem] border border-slate-100 text-center">
+                                <span class="material-symbols-rounded text-slate-300 text-5xl mb-3">rate_review</span>
+                                <p class="text-slate-500 font-bold text-lg">Belum ada ulasan.</p>
+                                <p class="text-slate-400 text-sm mt-1">Jadilah yang pertama memberi bintang untuk kost ini!</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Form Tulis Ulasan -->
+                    <?php if($msg !== 'already_reviewed'): ?>
+                    <div class="bg-red-50/50 p-6 md:p-8 rounded-[2rem] border border-red-100">
+                        <h3 class="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                            <span class="material-symbols-rounded text-[#FF6B6B]">edit_square</span> Tulis Pengalamanmu
+                        </h3>
+                        <form method="POST" class="space-y-4">
+                            <div>
+                                <select name="rating" required class="w-full bg-white border border-slate-200 p-4 rounded-2xl outline-none focus:border-[#FF6B6B] focus:ring-2 focus:ring-red-100 text-sm font-bold text-slate-600 transition-all shadow-sm">
+                                    <option value="" disabled selected>Pilih Rating (1-5 Bintang)</option>
+                                    <option value="5">⭐⭐⭐⭐⭐ Sangat Nyaman!</option>
+                                    <option value="4">⭐⭐⭐⭐ Bagus & Bersih</option>
+                                    <option value="3">⭐⭐⭐ Cukup Oke</option>
+                                    <option value="2">⭐⭐ Ada yang Perlu Diperbaiki</option>
+                                    <option value="1">⭐ Sangat Mengecewakan</option>
+                                </select>
+                            </div>
+                            <div>
+                                <textarea name="comment" required rows="4" class="w-full bg-white border border-slate-200 p-4 rounded-2xl outline-none focus:border-[#FF6B6B] focus:ring-2 focus:ring-red-100 text-sm font-medium text-slate-600 placeholder:text-slate-400 transition-all shadow-sm" placeholder="Ceritakan bagaimana fasilitas, keamanan, dan suasananya..."></textarea>
+                            </div>
+                            <div class="flex justify-end">
+                                <button type="submit" name="submit_review" class="bg-slate-800 text-white px-8 py-4 rounded-2xl font-black hover:bg-[#FF6B6B] hover:shadow-lg hover:shadow-red-200 transition-all flex items-center gap-2">
+                                    Kirim Ulasan <span class="material-symbols-rounded text-sm">send</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <?php endif; ?>
+
+                </div>
             </div>
 
+            <!-- KOLOM KANAN (SIDEBAR STICKY) -->
             <div class="lg:col-span-1">
                 <div class="glass p-8 rounded-[3rem] coral-shadow sticky top-10 space-y-8">
                     <div>
@@ -147,31 +237,18 @@ $facilities_array = !empty($kost['facilities']) ? explode(', ', $kost['facilitie
                     </div>
 
                     <div class="glass p-8 rounded-[3rem] coral-shadow mt-8">
-    <h2 class="text-xl font-black mb-6 flex items-center gap-2">
-        <span class="material-symbols-rounded text-[#FF6B6B]">map</span> Location
-    </h2>
-    <div class="rounded-3xl overflow-hidden h-64 bg-slate-100 border border-slate-100">
-        <iframe width="100%" height="100%" frameborder="0" style="border:0" 
-            src="https://www.google.com/maps/embed/v1/place?key=YOUR_API_KEY&q=<?= urlencode($kost['location']) ?>" allowfullscreen>
-        </iframe>
-    </div>
-</div>
-
-<div class="glass p-8 rounded-[3rem] coral-shadow mt-8">
-    <h2 class="text-xl font-black mb-6 flex items-center gap-2">
-        <span class="material-symbols-rounded text-[#FF6B6B]">reviews</span> Reviews (★ <?= $avg_rating ?>)
-    </h2>
-    <div class="space-y-4">
-        <?php while($rev = mysqli_fetch_assoc($reviews_query)): ?>
-            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p class="font-bold text-slate-800"><?= $rev['username'] ?> <span class="text-[#FF6B6B]">★ <?= $rev['rating'] ?></span></p>
-                <p class="text-sm text-slate-500"><?= $rev['comment'] ?></p>
-            </div>
-        <?php endwhile; ?>
-    </div>
-</div>
+                        <h2 class="text-xl font-black mb-6 flex items-center gap-2">
+                            <span class="material-symbols-rounded text-[#FF6B6B]">map</span> Location
+                        </h2>
+                        <div class="rounded-3xl overflow-hidden h-64 bg-slate-100 border border-slate-100">
+                            <iframe width="100%" height="100%" frameborder="0" style="border:0" 
+                                src="https://maps.google.com/maps?q=<?= urlencode($kost['location']) ?>&t=&z=15&ie=UTF8&iwloc=&output=embed" allowfullscreen>
+                            </iframe>
+                        </div>
+                    </div>
                 </div>
             </div>
+
         </div>
     </div>
 </body>

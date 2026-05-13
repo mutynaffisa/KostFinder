@@ -1,35 +1,39 @@
 <?php
 session_start();
-include '../db.php'; // Ini sudah benar karena db.php ada di luar folder auth
+include '../db.php';
+
+// Kalau sudah login, langsung lempar ke dashboard masing-masing
+if (isset($_SESSION['user_id'])) {
+    $role = $_SESSION['role'];
+    if ($role == 'admin') header("Location: ../admin/admin_dashboard.php");
+    elseif ($role == 'owner') header("Location: ../owner/owner_dashboard.php");
+    else header("Location: ../user/user_dashboard.php");
+    exit;
+}
+
+$error = '';
 
 if (isset($_POST['login'])) {
     $email = mysqli_real_escape_string($conn, $_POST['email']);
-    $password = $_POST['password'];
+    $password = mysqli_real_escape_string($conn, $_POST['password']);
 
-    $result = mysqli_query($conn, "SELECT * FROM users WHERE email = '$email'");
+    // Cek user di database (Asumsi password tidak di-hash, sesuaikan jika pakai MD5/Hash)
+    $query = mysqli_query($conn, "SELECT * FROM users WHERE email = '$email' AND password = '$password'");
     
-    if (mysqli_num_rows($result) === 1) {
-        $row = mysqli_fetch_assoc($result);
+    if (mysqli_num_rows($query) > 0) {
+        $data = mysqli_fetch_assoc($query);
         
-        if (password_verify($password, $row['password'])) {
-            $_SESSION['user_id'] = $row['id'];
-            $_SESSION['role'] = $row['role'];
-            $_SESSION['username'] = $row['username'];
+        $_SESSION['user_id'] = $data['id'];
+        $_SESSION['username'] = $data['username'];
+        $_SESSION['role'] = $data['role'];
 
-            // PERBAIKAN DI SINI:
-            // Kita harus naik satu folder (../) lalu masuk ke folder sesuai role
-            // Kita keluar folder 'auth', lalu masuk ke folder saudaranya
-       $dashboard = [
-    'admin' => '../admin/admin_dashboard.php',
-    'owner' => '../owner/owner_add_kost.php',
-    'user'  => '../user/user_dashboard.php' // <-- Pastikan ada '/user/' nya!
-];
-
-            header("Location: " . ($dashboard[$row['role']] ?? '../user/user_dashboard.php'));
-            exit;
-        }
+        if ($data['role'] == 'admin') header("Location: ../admin/admin_dashboard.php");
+        elseif ($data['role'] == 'owner') header("Location: ../owner/owner_dashboard.php");
+        else header("Location: ../user/user_dashboard.php");
+        exit;
+    } else {
+        $error = "Email atau Password salah!";
     }
-    $error = true;
 }
 ?>
 <!DOCTYPE html>
@@ -37,54 +41,60 @@ if (isset($_POST['login'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - DreamRoom</title>
+    <title>Login | KosFinder</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>body { font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f4f7fa; }
+    </style>
 </head>
-<body class="bg-slate-50 flex items-center justify-center min-h-screen p-4">
-    <div class="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-2xl shadow-blue-100 w-full max-w-md border border-white">
-        <div class="text-center mb-10">
-            <div class="inline-block p-4 bg-red-50 rounded-2xl mb-4 text-[#FF6B6B]">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white w-full max-w-md p-8 sm:p-10 rounded-[2.5rem] shadow-xl shadow-slate-200/50">
+        
+        <div class="flex justify-center mb-6">
+            <div class="w-14 h-14 bg-red-50 text-[#FF6B6B] rounded-2xl flex items-center justify-center">
+                <span class="material-symbols-rounded text-3xl">home</span>
             </div>
-            <h2 class="text-3xl font-bold text-gray-800">Welcome Back! ✨</h2>
-            <p class="text-gray-500 mt-2">Ready to find your next favorite spot?</p>
         </div>
 
-        <?php if (isset($error)): ?>
-            <div class="bg-red-50 text-red-500 p-4 rounded-xl text-sm mb-6 border border-red-100 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                </svg>
-                Email atau password salah!
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-[800] text-slate-800 mb-2">Welcome Back! ✨</h1>
+            <p class="text-sm text-slate-500 font-medium">Ready to find your next favorite spot?</p>
+        </div>
+
+        <?php if($error): ?>
+            <div class="bg-red-50 text-red-500 p-4 rounded-xl mb-6 text-sm font-bold text-center">
+                <?= $error ?>
             </div>
         <?php endif; ?>
 
-        <form method="POST" class="space-y-6">
+        <form method="POST" class="space-y-5">
             <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-2 ml-1">Email Address</label>
-                <input type="email" name="email" placeholder="name@email.com"
-                    class="w-full p-4 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-[#FF6B6B] focus:bg-white transition-all outline-none" required>
+                <label class="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
+                <input type="email" name="email" required placeholder="admin@gmail.com" 
+                       class="w-full bg-[#EEF2F6] border-none text-slate-700 font-semibold px-5 py-4 rounded-xl focus:ring-2 focus:ring-red-200 outline-none transition-all">
             </div>
+
             <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-2 ml-1">Password</label>
-                <input type="password" name="password" placeholder="••••••••"
-                    class="w-full p-4 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-[#FF6B6B] focus:bg-white transition-all outline-none" required>
+                <label class="block text-sm font-bold text-slate-700 mb-2">Password</label>
+                <input type="password" name="password" required placeholder="••••••••" 
+                       class="w-full bg-[#EEF2F6] border-none text-slate-700 font-semibold px-5 py-4 rounded-xl focus:ring-2 focus:ring-red-200 outline-none transition-all">
             </div>
-            <button name="login"
-                class="w-full bg-[#FF6B6B] text-white p-4 rounded-2xl font-bold shadow-lg shadow-red-200 hover:bg-[#ff5252] transition-all transform hover:-translate-y-1">
+
+            <button type="submit" name="login" 
+                    class="w-full bg-[#FF6B6B] hover:bg-[#ff5252] text-white font-bold py-4 rounded-xl shadow-lg shadow-red-200 hover:shadow-red-300 transition-all mt-4">
                 Sign In
             </button>
         </form>
 
-        <div class="mt-8 text-center">
-            <p class="text-gray-500">Don't have an account? 
-                <a href="register.php" class="text-[#FF6B6B] font-bold hover:underline">Create Account</a>
-            </p>
-        </div>
+        <p class="text-center text-sm font-medium text-slate-500 mt-8">
+            Don't have an account? 
+            <!-- INI LINK YANG DIPERBAIKI -->
+            <a href="register.php" class="text-[#FF6B6B] font-bold hover:underline">Create Account</a>
+        </p>
     </div>
+
 </body>
 </html>

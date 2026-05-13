@@ -83,6 +83,10 @@ $active_kost_id = isset($_GET['kost_id']) ? (int)$_GET['kost_id'] : 0;
 
     <div class="hidden md:flex flex-1 flex-col h-full bg-white relative">
         <?php if($active_renter_id): 
+            
+            // --- EKSEKUSI PENGHAPUSAN NOTIF (UPDATE STATUS IS_READ JADI 1) ---
+            mysqli_query($conn, "UPDATE messages SET is_read = 1 WHERE receiver_id = $owner_id AND sender_id = $active_renter_id");
+
             $chat_history = mysqli_query($conn, "SELECT * FROM messages WHERE ((sender_id = $owner_id AND receiver_id = $active_renter_id) OR (sender_id = $active_renter_id AND receiver_id = $owner_id)) AND kost_id = $active_kost_id ORDER BY created_at ASC");
             $renter_name_active = mysqli_fetch_assoc(mysqli_query($conn, "SELECT username FROM users WHERE id = $active_renter_id"))['username'];
         ?>

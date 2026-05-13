@@ -1,12 +1,19 @@
 <?php
-$host = "localhost";
-$user = "root";
-$pass = "";
-$db = "kosfinder_db"; // Harus sama dengan nama database di SQL tadi
+// Mengambil data otomatis dari variabel yang kamu pasang di Railway tadi
+$host = getenv('MYSQLHOST');
+$user = getenv('MYSQLUSER');
+$pass = getenv('MYSQLPASSWORD');
+$db   = getenv('MYSQLDATABASE');
+$port = getenv('MYSQLPORT') ?: 3306; // Tambahkan port standar Railway
 
-$conn = mysqli_connect($host, $user, $pass, $db);
+// Melakukan koneksi ke database
+$conn = mysqli_connect($host, $user, $pass, $db, $port);
 
 if (!$conn) {
+    // Menampilkan pesan error jika koneksi gagal
     die("Koneksi Database Gagal: " . mysqli_connect_error());
 }
+
+// Opsional: Pesan sukses (bisa kamu hapus nanti jika sudah lancar)
+// echo "Koneksi Berhasil!"; 
 ?>

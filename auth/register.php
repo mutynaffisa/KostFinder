@@ -2,80 +2,113 @@
 session_start();
 include '../db.php';
 
-if (!isset($_SESSION['user_id'])) { header("Location: ../auth/login.php"); exit; }
+// Kalau sudah login, langsung lempar ke dashboard masing-masing
+if (isset($_SESSION['user_id'])) {
+    header("Location: ../user/user_dashboard.php");
+    exit;
+}
 
-$user_name = $_SESSION['username'];
+$error = '';
 
-// Logic Search & Category
-$q = isset($_GET['q']) ? mysqli_real_escape_string($conn, $_GET['q']) : '';
-$cat = isset($_GET['category']) ? $_GET['category'] : '';
+if (isset($_POST['register'])) {
+    $username = mysqli_real_escape_string($conn, $_POST['username']);
+    $email = mysqli_real_escape_string($conn, $_POST['email']);
+    $password = mysqli_real_escape_string($conn, $_POST['password']);
+    $role = mysqli_real_escape_string($conn, $_POST['role']);
 
-$sql = "SELECT * FROM kosts WHERE status = 'approved'";
-if ($q) $sql .= " AND (name LIKE '%$q%' OR location LIKE '%$q%')";
-if ($cat) $sql .= " AND lifestyle_category = '$cat'";
-$sql .= " ORDER BY is_promoted DESC, created_at DESC";
-
-$result = mysqli_query($conn, $sql);
+    // Cek apakah email sudah terdaftar
+    $check_email = mysqli_query($conn, "SELECT id FROM users WHERE email = '$email'");
+    
+    if (mysqli_num_rows($check_email) > 0) {
+        $error = "Email sudah terdaftar! Gunakan email lain.";
+    } else {
+        // Masukkan data ke database
+        $insert = mysqli_query($conn, "INSERT INTO users (username, email, password, role) VALUES ('$username', '$email', '$password', '$role')");
+        
+        if ($insert) {
+            echo "<script>
+                    alert('Akun berhasil dibuat! Silakan Sign In.');
+                    window.location.href = 'login.php';
+                  </script>";
+            exit;
+        } else {
+            $error = "Gagal membuat akun. Silakan coba lagi.";
+        }
+    }
+}
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8"/><title>KosFinder - Discover</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register | KosFinder</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <style>body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8f9fb; }</style>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f4f7fa; }
+    </style>
 </head>
-<body class="pb-24">
+<body class="flex items-center justify-center min-h-screen p-4 py-10">
 
-<header class="bg-white/80 backdrop-blur-md sticky top-0 z-50 p-6 flex justify-between items-center border-b border-gray-100">
-    <div class="text-2xl font-black text-[#ff6b6b]">KosFinder</div>
-    <div class="flex items-center gap-4 italic text-sm">Hi, <?= $user_name ?>! <a href="../auth/logout.php" class="text-red-400 not-italic font-bold">Logout</a></div>
-</header>
-
-<main class="max-w-7xl mx-auto p-6 space-y-10">
-    <form class="relative group">
-        <span class="material-symbols-outlined absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#ff6b6b]">search</span>
-        <input type="text" name="q" value="<?= $q ?>" placeholder="Where do you want to live?" class="w-full p-6 pl-14 bg-white rounded-[2rem] shadow-sm border-none focus:ring-2 focus:ring-[#ff6b6b] outline-none text-lg">
-    </form>
-
-    <div class="flex gap-4 overflow-x-auto pb-4">
-        <?php 
-        $categories = ['quiet' => 'Quiet', 'creative' => 'Creative', 'social' => 'Social', 'budget' => 'Budget'];
-        foreach($categories as $key => $val): ?>
-            <a href="?category=<?= $key ?>" class="px-8 py-4 rounded-2xl font-bold whitespace-nowrap transition-all <?= $cat === $key ? 'bg-[#ff6b6b] text-white shadow-lg' : 'bg-white text-gray-500 hover:bg-gray-50' ?>">
-                <?= $val ?>
-            </a>
-        <?php endforeach; ?>
-        <?php if($cat): ?> <a href="user_dashboard.php" class="px-8 py-4 text-red-500 font-bold">Reset</a> <?php endif; ?>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        <?php if(mysqli_num_rows($result) > 0): ?>
-            <?php while($k = mysqli_fetch_assoc($result)): ?>
-            <div class="bg-white rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-xl transition-all group border border-gray-50">
-                <div class="relative h-64">
-                    <img src="../<?= $k['thumbnail'] ?>" class="w-full h-full object-cover group-hover:scale-105 transition-all">
-                    <?php if($k['is_promoted']): ?>
-                        <div class="absolute top-4 left-4 bg-orange-400 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase">PROMOTED</div>
-                    <?php endif; ?>
-                </div>
-                <div class="p-6">
-                    <h3 class="text-xl font-bold mb-1"><?= $k['name'] ?></h3>
-                    <p class="text-gray-400 text-sm flex items-center gap-1 mb-4 italic"><span class="material-symbols-outlined text-sm">location_on</span> <?= $k['location'] ?></p>
-                    <div class="flex justify-between items-center">
-                        <p class="text-[#ff6b6b] font-black text-xl">Rp <?= number_format($k['price'], 0, ',', '.') ?><span class="text-xs text-gray-400 font-normal">/mo</span></p>
-                        <button class="bg-gray-100 p-3 rounded-2xl hover:bg-[#ff6b6b] hover:text-white transition-all"><span class="material-symbols-outlined">chevron_right</span></button>
-                    </div>
-                </div>
+    <div class="bg-white w-full max-w-md p-8 sm:p-10 rounded-[2.5rem] shadow-xl shadow-slate-200/50">
+        
+        <div class="flex justify-center mb-6">
+            <div class="w-14 h-14 bg-red-50 text-[#FF6B6B] rounded-2xl flex items-center justify-center">
+                <span class="material-symbols-rounded text-3xl">person_add</span>
             </div>
-            <?php endwhile; ?>
-        <?php else: ?>
-            <p class="col-span-full text-center text-gray-400 italic py-20">No properties found matching your search.</p>
+        </div>
+
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-[800] text-slate-800 mb-2">Create Account 🚀</h1>
+            <p class="text-sm text-slate-500 font-medium">Join us and start your journey!</p>
+        </div>
+
+        <?php if($error): ?>
+            <div class="bg-red-50 text-red-500 p-4 rounded-xl mb-6 text-sm font-bold text-center">
+                <?= $error ?>
+            </div>
         <?php endif; ?>
+
+        <form method="POST" class="space-y-4">
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">Full Name</label>
+                <input type="text" name="username" required placeholder="John Doe" 
+                       class="w-full bg-[#EEF2F6] border-none text-slate-700 font-semibold px-5 py-4 rounded-xl focus:ring-2 focus:ring-red-200 outline-none transition-all">
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
+                <input type="email" name="email" required placeholder="youremail@gmail.com" 
+                       class="w-full bg-[#EEF2F6] border-none text-slate-700 font-semibold px-5 py-4 rounded-xl focus:ring-2 focus:ring-red-200 outline-none transition-all">
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">Password</label>
+                <input type="password" name="password" required placeholder="••••••••" 
+                       class="w-full bg-[#EEF2F6] border-none text-slate-700 font-semibold px-5 py-4 rounded-xl focus:ring-2 focus:ring-red-200 outline-none transition-all">
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">I want to...</label>
+                <select name="role" required class="w-full bg-[#EEF2F6] border-none text-slate-700 font-semibold px-5 py-4 rounded-xl focus:ring-2 focus:ring-red-200 outline-none transition-all">
+                    <option value="user">Cari Kost (Renter)</option>
+                    <option value="owner">Sewakan Kost (Owner)</option>
+                </select>
+            </div>
+
+            <button type="submit" name="register" 
+                    class="w-full bg-slate-800 hover:bg-[#FF6B6B] text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-red-200 transition-all mt-6">
+                Create Account
+            </button>
+        </form>
+
+        <p class="text-center text-sm font-medium text-slate-500 mt-8">
+            Already have an account? 
+            <a href="login.php" class="text-[#FF6B6B] font-bold hover:underline">Sign In</a>
+        </p>
     </div>
-</main>
 
 </body>
 </html>
